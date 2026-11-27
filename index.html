@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>最简构筑卡牌原型</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #eee; margin: 0; padding: 20px; }
+  h1 { text-align: center; color: #00d4ff; }
+  .container { max-width: 900px; margin: 0 auto; }
+  .status { display: flex; justify-content: space-around; background: #16213e; padding: 15px; border-radius: 10px; margin-bottom: 20px; }
+  .hand, .log { background: #0f3460; padding: 15px; border-radius: 10px; margin-bottom: 15px; min-height: 80px; }
+  .card { display: inline-block; background: #e94560; color: white; padding: 10px 15px; margin: 5px; border-radius: 8px; cursor: pointer; user-select: none; }
+  .card:hover { background: #ff6b6b; }
+  .card.disabled { opacity: 0.5; cursor: not-allowed; }
+  button { background: #00d4ff; color: #000; border: none; padding: 10px 20px; font-size: 16px; border-radius: 8px; cursor: pointer; margin: 5px; }
+  button:hover { background: #00a8cc; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #log { max-height: 200px; overflow-y: auto; font-size: 14px; }
+  .phase { font-weight: bold; color: #ffd93d; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>最简构筑卡牌原型</h1>
+  <div class="status">
+    <div>你的生命: <span id="player-hp">30</span></div>
+    <div>AI 生命: <span id="ai-hp">30</span></div>
+    <div>回合: <span id="turn">1</span> | <span id="phase" class="phase">你的回合</span></div>
+  </div>
+  <div>
+    <strong>你的手牌：</strong>
+    <div id="hand" class="hand"></div>
+  </div>
+  <div>
+    <button id="end-turn" onclick="endTurn()">结束回合</button>
+    <button onclick="location.reload()">重新开始</button>
+  </div>
+  <div>
+    <strong>战斗日志：</strong>
+    <div id="log" class="log"></div>
+  </div>
+</div>
+
+<script>
+// 卡牌池（同名最多2张，这里演示用固定牌库）
+const CARD_POOL = [
+  { id: 'strike', name: '打击', type: 'damage', value: 3, desc: '造成3点伤害' },
+  { id: 'strike', name: '打击', type: 'damage', value: 3, desc: '造成3点伤害' },
+  { id: 'heavy', name: '重击', type: 'damage', value: 5, desc: '造成5点伤害' },
+  { id: 'heavy', name: '重击', type: 'damage', value: 5, desc: '造成5点伤害' },
+  { id: 'draw', name: '抽牌', type: 'draw', value: 2, desc: '抽2张牌' },
+  { id: 'draw', name: '抽牌', type: 'draw', value: 2, desc: '抽2张牌' },
+  { id: 'heal', name: '治疗', type: 'heal', value: 4, desc: '回复4点生命' },
+  { id: 'heal', name: '治疗', type: 'heal', value: 4, desc: '回复4点生命' },
+  { id: 'strike2', name: '连击', type: 'damage', value: 2, desc: '造成2点伤害并抽1张' },
+  { id: 'strike2', name: '连击', type: 'damage', value: 2, desc: '造成2点伤害并抽1张' },
+  { id: 'shield', name: '护盾', type: 'heal', value: 3, desc: '回复3点生命' },
+  { id: 'shield', name: '护盾', type: 'heal', value: 3, desc: '回复3点生命' },
+  { id: 'power', name: '强攻', type: 'damage', value: 6, desc: '造成6点伤害' },
+  { id: 'power', name: '强攻', type: 'damage', value: 6, desc: '造成6点伤害' },
+  { id: 'cycle', name: '循环', type: 'draw', value: 1, desc: '抽1张牌' },
+  { id: 'cycle', name: '循环', type: 'draw', value: 1, desc: '抽1张牌' },
+  { id: 'bash', name: '猛击', type: 'damage', value: 4, desc: '造成4点伤害' },
+  { id: 'bash', name: '猛击', type: 'damage', value: 4, desc: '造成4点伤害' },
+  { id: 'mend', name: '修复', type: 'heal', value: 5, desc: '回复5点生命' },
+  { id: 'mend', name: '修复', type: 'heal', value: 5, desc: '回复5点生命' },
+];
+
+function createDeck() {
+  return [...CARD_POOL].sort(() => Math.random() - 0.5);
+}
+
+let player = { hp: 30, deck: createDeck(), hand: [], discard: [] };
+let ai = { hp: 30, deck: createDeck(), hand: [], discard: [] };
+let turn = 1;
+let isPlayerTurn = true;
+
+function log(msg) {
+  const el = document.getElementById('log');
+  el.innerHTML = msg + '<br>' + el.innerHTML;
+}
+
+function drawCards(who, n) {
+  for (let i = 0; i < n; i++) {
+    if (who.deck.length === 0) {
+      if (who.discard.length === 0) break;
+      who.deck = who.discard.sort(() => Math.random() - 0.5);
+      who.discard = [];
+      log((who === player ? '你' : 'AI') + ' 洗牌了');
+    }
+    if (who.deck.length > 0) who.hand.push(who.deck.pop());
+  }
+}
+
+function render() {
+  document.getElementById('player-hp').textContent = player.hp;
+  document.getElementById('ai-hp').textContent = ai.hp;
+  document.getElementById('turn').textContent = turn;
+  document.getElementById('phase').textContent = isPlayerTurn ? '你的回合' : 'AI回合';
+
+  const handEl = document.getElementById('hand');
+  handEl.innerHTML = '';
+  player.hand.forEach((card, idx) => {
+    const div = document.createElement('div');
+    div.className = 'card' + (isPlayerTurn ? '' : ' disabled');
+    div.textContent = card.name + ' (' + card.desc + ')';
+    div.onclick = () => { if (isPlayerTurn) playCard(idx); };
+    handEl.appendChild(div);
+  });
+  if (player.hand.length === 0) handEl.textContent = '（无手牌）';
+
+  document.getElementById('end-turn').disabled = !isPlayerTurn;
+}
+
+function playCard(idx) {
+  const card = player.hand.splice(idx, 1)[0];
+  resolveCard(card, player, ai, '你');
+  player.discard.push(card);
+  render();
+  checkWin();
+}
+
+function resolveCard(card, source, target, who) {
+  if (card.type === 'damage') {
+    target.hp -= card.value;
+    log(who + ' 打出【' + card.name + '】，造成 ' + card.value + ' 点伤害');
+    if (card.name === '连击') drawCards(source, 1);
+  } else if (card.type === 'heal') {
+    source.hp = Math.min(30, source.hp + card.value);
+    log(who + ' 打出【' + card.name + '】，回复 ' + card.value + ' 点生命');
+  } else if (card.type === 'draw') {
+    drawCards(source, card.value);
+    log(who + ' 打出【' + card.name + '】，抽了 ' + card.value + ' 张牌');
+  }
+}
+
+function aiTurn() {
+  isPlayerTurn = false;
+  render();
+  log('--- AI 回合 ---');
+  drawCards(ai, 5);
+
+  let played = true;
+  while (played && ai.hand.length > 0) {
+    played = false;
+    let idx = ai.hand.findIndex(c => c.type === 'damage');
+    if (idx === -1 && ai.hp < 20) idx = ai.hand.findIndex(c => c.type === 'heal');
+    if (idx === -1) idx = ai.hand.findIndex(c => c.type === 'draw');
+    if (idx === -1) idx = 0;
+
+    if (idx >= 0) {
+      const card = ai.hand.splice(idx, 1)[0];
+      resolveCard(card, ai, player, 'AI');
+      ai.discard.push(card);
+      played = true;
+    }
+  }
+  ai.discard.push(...ai.hand);
+  ai.hand = [];
+  log('AI 结束回合');
+
+  if (!checkWin()) {
+    isPlayerTurn = true;
+    turn++;
+    startPlayerTurn();
+  }
+}
+
+function startPlayerTurn() {
+  log('=== 第 ' + turn + ' 回合：你的回合 ===');
+  drawCards(player, 5);
+  render();
+}
+
+function endTurn() {
+  if (!isPlayerTurn) return;
+  player.discard.push(...player.hand);
+  player.hand = [];
+  log('你结束了回合');
+  render();
+  setTimeout(aiTurn, 600);
+}
+
+function checkWin() {
+  if (player.hp <= 0) {
+    log('<b style="color:#ff6b6b">你输了！</b>');
+    isPlayerTurn = false;
+    render();
+    return true;
+  }
+  if (ai.hp <= 0) {
+    log('<b style="color:#6bff6b">你赢了！</b>');
+    isPlayerTurn = false;
+    render();
+    return true;
+  }
+  return false;
+}
+
+log('游戏开始！双方生命30，牌库20张（同名最多2张）。');
+startPlayerTurn();
+</script>
+</body>
+</html>

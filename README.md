@@ -1,2 +1,16 @@
-# simple-card-prototype
-Minimal constructed card game prototype with AI opponent
+# 最简构筑卡牌原型
+
+一个极简的构筑对战卡牌游戏原型，部署在 GitHub Pages。
+
+## 规则
+- 每人 20 张牌库（示例牌池，同名卡最多 2 张）
+- 每回合抽 5 张
+- 打出卡牌产生效果（伤害 / 治疗 / 抽牌）
+- 结束回合时弃掉剩余手牌
+- 对手是简单 AI
+- 先把对方生命打到 0 获胜（起始 30 血）
+
+## 游玩
+打开线上地址即可开始。
+
+刷新页面重新开始。
